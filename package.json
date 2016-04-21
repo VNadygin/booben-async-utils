@@ -1,0 +1,19 @@
+{
+  "name": "@common/async-utils",
+  "version": "0.0.1",
+  "description": "Common utilites for async control flow",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "ssh://git@gitlab.ordbuy.com:29184/common/async-utils.git"
+  },
+  "keywords": [
+    "async",
+    "util"
+  ],
+  "author": "Dmitriy Bizyaev",
+  "license": "UNLICENCED"
+}
