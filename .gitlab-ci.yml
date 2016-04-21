@@ -1,0 +1,11 @@
+stages:
+  - publish
+
+npm:
+  stage: publish
+  script:
+    - "npm publish"
+  only:
+    - master
+  tags:
+    - npm

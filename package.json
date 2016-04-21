@@ -12,8 +12,12 @@
   },
   "keywords": [
     "async",
+    "promise",
     "util"
   ],
   "author": "Dmitriy Bizyaev",
-  "license": "UNLICENCED"
+  "license": "UNLICENCED",
+  "dependencies": {
+    "co": "^4.6.0"
+  }
 }
