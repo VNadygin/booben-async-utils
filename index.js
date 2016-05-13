@@ -140,6 +140,13 @@ exports.asyncForEach = (array, fn, options) => co(function* () {
     }
 });
 
+const isNat = x => typeof x === 'number' && !isNaN(x) && x % 1 === 0 && x > 0;
+
+/**
+ * @typedef {Object} WorkerOptions
+ * @property {number} queueLength
+ */
+
 /**
  * @class {Worker}
  */
@@ -148,12 +155,23 @@ exports.Worker = class {
      *
      * @param {function(item: *): Promise|*} processItemFn
      * @param {number} threads
+     * @param {WorkerOptions} options
      */
-    constructor(processItemFn, threads) {
+    constructor(processItemFn, threads, options) {
+        if (typeof processItemFn !== 'function')
+            throw new Error('processItemFn must be a function');
+        
+        if (!isNat(threads))
+            throw new Error('threads must be a positive integer');
+        
+        options = options || {};
+
         this._processItemFn = processItemFn;
+        this._threads = threads;
+        this._queueLength = options.queueLength || 0;
         this._queue = [];
-        this._threads = threads || 1;
         this._threadsActive = 0;
+        this._itemCallbacks = new Map();
     }
 
     /**
@@ -161,8 +179,24 @@ exports.Worker = class {
      * @param {*} item
      */
     addItem(item) {
+        if (this._queue.length >= this._queueLength) return false;
+        
         this._queue.push(item);
         if (this._threadsActive < this._threads) this._doWork();
+        return true;
+    }
+
+    /**
+     * 
+     * @param {*} item
+     * @returns {Promise}
+     */
+    processItem(item) {
+        if (!this.addItem(item))
+            return Promise.reject(new Error('Queue is full'));
+        
+        return new Promise((resolve, reject) =>
+            void this._itemCallbacks.set(item, { resolve, reject }));
     }
 
     /**
@@ -177,8 +211,18 @@ exports.Worker = class {
         co(function* () {
             let currentItem = null;
 
-            while (currentItem = that._queue.shift())
-                yield that._processItemFn(currentItem);
+            while (currentItem = that._queue.shift()) {
+                const callbacks = that._itemCallbacks.get(currentItem);
+                that._itemCallbacks.delete(currentItem);
+                
+                try {
+                    const res = yield Promise.resolve(that._processItemFn(currentItem));
+                    if (callbacks) callbacks.resolve(res);
+                }
+                catch (err) {
+                    if (callbacks) callbacks.reject(err);
+                }
+            }
 
             that._threadsActive--;
         });
