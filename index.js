@@ -193,11 +193,16 @@ exports.Worker = class Worker {
      * @returns {Promise}
      */
     processItem(item) {
-        if (!this.addItem(item))
+        if (this._queue.length >= this._queueLength)
             return Promise.reject(new Error('Queue is full'));
+
+        this._queue.push(item);
         
-        return new Promise((resolve, reject) =>
+        const promise = new Promise((resolve, reject) =>
             void this._itemCallbacks.set(item, { resolve, reject }));
+
+        if (this._threadsActive < this._threads) this._doWork();
+        return promise;
     }
 
     /**
