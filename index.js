@@ -8,7 +8,8 @@
  *
  * @ignore
  */
-const co = require('co');
+const co = require('co'),
+    prettyMs = require('pretty-ms');
 
 /**
  *
@@ -144,18 +145,18 @@ const isNat = x => typeof x === 'number' && !isNaN(x) && x % 1 === 0 && x > 0;
 
 /**
  * @typedef {Object} WorkerOptions
- * @property {number} queueLength
+ * @property {number} [queueLength]
  */
 
 /**
  * @class {Worker}
  */
-exports.Worker = class {
+exports.Worker = class Worker {
     /**
      *
      * @param {function(item: *): Promise|*} processItemFn
      * @param {number} threads
-     * @param {WorkerOptions} options
+     * @param {WorkerOptions} [options]
      */
     constructor(processItemFn, threads, options) {
         if (typeof processItemFn !== 'function')
@@ -224,6 +225,151 @@ exports.Worker = class {
                 }
             }
 
+            that._threadsActive--;
+        });
+    }
+};
+
+/**
+ *
+ * @const {number}
+ */
+const DEFAULT_TOO_LONG_TIME = 1000 * 60 * 10; // 10 minutes
+
+/**
+ *
+ * @const {number}
+ */
+const DEFAULT_WARN_INTERVAL = 1000 * 60; // One minute
+
+/**
+ * @typedef {Object} SelfServiceWorkerOptions
+ * @property {number} [threads]
+ * @property {function(item: *, err: Error)} [onError]
+ * @property {number} [tooLongTime]
+ * @property {number} [tooLongWarnInterval]
+ * @property {Object} [logger]
+ */
+
+/**
+ *
+ * @const {SelfServiceWorkerOptions}
+ */
+const defaultSelfServiceWorkerOptions = {
+    threads: 1,
+    logger: null,
+    onError: null,
+    tooLongTime: DEFAULT_TOO_LONG_TIME,
+    tooLongWarnInterval: DEFAULT_WARN_INTERVAL
+};
+
+/**
+ *
+ * @type {number}
+ */
+let nextSelfServiceWorkerId = 0;
+
+/**
+ *
+ * @class SelfServiceWorker
+ */
+exports.SelfServiceWorker = class SelfServiceWorker {
+    /**
+     *
+     * @param {function(item: *): Promise|*} processItemFn
+     * @param {function(number): Promise} getNextItemFn
+     * @param {SelfServiceWorkerOptions} [options]
+     */
+    constructor(processItemFn, getNextItemFn, options) {
+        options = Object.assign({}, defaultSelfServiceWorkerOptions, options);
+
+        this._id = nextSelfServiceWorkerId++;
+        this._processItemFn = processItemFn;
+        this._getItemFn = getNextItemFn;
+        this._onError = options.onError || null;
+        this._threads = options.threads || 1;
+        this._tooLongTime = options.tooLongTime;
+        this._tooLongWarnInterval = options.tooLongWarnInterval;
+        this._threadsActive = 0;
+        this._logger = options.logger || null;
+
+        this._logger && this._logger.verbose(
+            `SelfServiceWorker ${ this._id } created: ${ this._threads } threads max`
+        );
+    }
+
+    /**
+     *
+     */
+    start() {
+        this._logger && this._logger.verbose(
+            `SelfServiceWorker ${ this._id }: start() call ` +
+            `when ${ this._threadsActive }/${ this._threads } threads are active`
+        );
+
+        while (this._threadsActive < this._threads) {
+            this._threadsActive++;
+            this._doWork(this._threadsActive - 1);
+        }
+    }
+
+    _warnTooLong(threadId, timeStart) {
+        const time = Date.now() - timeStart;
+
+        this._logger && this._logger.warn(
+            `SelfServiceWorker ${ this._id } thread ${ threadId }: ` +
+            `processing is taking too long (${ prettyMs(time) })`
+        );
+    }
+
+    _error(threadId, item, err) {
+        this._logger && this._logger.error(
+            `SelfServiceWorker ${ this._id } thread ${ threadId }: ` +
+            `error while processing item: ${ err }`
+        );
+
+        this._onError && this._onError(item, err);
+    }
+
+    /**
+     *
+     * @private
+     */
+    _doWork(threadId) {
+        const that = this;
+
+        return co(function* () {
+            let currentItem = null,
+                itemsProcessed = 0,
+                startTime = Date.now(),
+                warningInterval = null,
+                startWarnTimeout = null;
+
+            startWarnTimeout = setTimeout(() => {
+                const warn = () => that._warnTooLong(threadId, startTime);
+                warningInterval = setInterval(warn, that._tooLongWarnInterval);
+                startWarnTimeout = null;
+            }, that._tooLongTime);
+
+            while (currentItem = yield that._getItemFn(threadId)) {
+                try {
+                    yield that._processItemFn(currentItem, threadId);
+                }
+                catch (err) {
+                    that._error(threadId, currentItem, err);
+                }
+
+                itemsProcessed++;
+            }
+
+            that._logger && that._logger.verbose(
+                `SelfServiceWorker ${ that._id } thread ${ threadId } finished: ` +
+                `${ itemsProcessed } items processed ` +
+                `in ${ prettyMs(Date.now() - startTime) }`
+            );
+
+            if (startWarnTimeout) clearTimeout(startWarnTimeout);
+            if (warningInterval) clearInterval(warningInterval);
             that._threadsActive--;
         });
     }
