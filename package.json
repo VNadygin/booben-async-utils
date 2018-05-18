@@ -1,22 +1,18 @@
 {
-  "name": "@common/async-utils",
+  "name": "booben/async-utils",
   "version": "0.2.1",
   "description": "Common utilites for async control flow",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": {
-    "type": "git",
-    "url": "ssh://git@gitlab.ordbuy.com:29184/common/async-utils.git"
-  },
   "keywords": [
     "async",
     "promise",
     "util"
   ],
-  "author": "Dmitriy Bizyaev",
-  "license": "UNLICENCED",
+  "author": "braincrumbs.io",
+  "license": "MIT",
   "dependencies": {
     "co": "^4.6.0",
     "pretty-ms": "^2.1.0"
