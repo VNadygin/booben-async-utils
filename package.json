@@ -1,5 +1,5 @@
 {
-  "name": "booben/async-utils",
+  "name": "booben-async-utils",
   "version": "0.2.1",
   "description": "Common utilites for async control flow",
   "main": "index.js",
