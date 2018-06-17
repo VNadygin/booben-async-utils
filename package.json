@@ -1,6 +1,6 @@
 {
   "name": "booben-async-utils",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Common utilites for async control flow",
   "main": "index.js",
   "scripts": {
